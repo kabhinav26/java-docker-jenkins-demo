@@ -13,19 +13,20 @@ pipeline {
     environment {
         DOCKER_IMAGE = 'sbexample'
         DOCKER_TAG = "${BUILD_NUMBER}"
-        DOCKER_HOST = 'unix:///Users/abhinav/.docker/run/docker.sock'
     }
     
     stages {
-        stage('Verify Docker') {
+        stage('Verify Environment') {
             steps {
                 sh '''
-                    echo "Docker socket permissions:"
-                    ls -l /Users/abhinav/.docker/run/docker.sock
-                    echo "Docker version:"
-                    docker version
-                    echo "Docker info:"
-                    docker info
+                    echo "Checking Docker installation..."
+                    which docker || (echo "Docker not found" && exit 1)
+                    docker --version
+                    docker ps
+                    
+                    echo "Checking Java and Maven..."
+                    mvn --version
+                    java --version
                 '''
             }
         }
@@ -48,45 +49,45 @@ pipeline {
             }
         }
         
-        stage('Build Docker Image') {
+        stage('Docker Build and Deploy') {
             steps {
-                script {
-                    sh "docker build -t ${DOCKER_IMAGE}:${DOCKER_TAG} ."
-                }
-            }
-        }
-        
-        stage('Stop and Remove Old Container') {
-            steps {
-                script {
-                    sh '''
-                        if [ "$(docker ps -q -f name=sbexample-app)" ]; then
-                            docker stop sbexample-app
-                            docker rm sbexample-app
-                        fi
-                    '''
-                }
-            }
-        }
-        
-        stage('Run New Container') {
-            steps {
-                script {
-                    sh "docker run -d -p 8083:8083 --name sbexample-app ${DOCKER_IMAGE}:${DOCKER_TAG}"
-                }
+                sh '''
+                    # Build the image
+                    docker build -t ${DOCKER_IMAGE}:${DOCKER_TAG} .
+                    
+                    # Stop and remove existing container if running
+                    CONTAINER_ID=$(docker ps -q -f name=sbexample-app)
+                    if [ ! -z "$CONTAINER_ID" ]; then
+                        echo "Stopping existing container..."
+                        docker stop $CONTAINER_ID
+                        docker rm $CONTAINER_ID
+                    fi
+                    
+                    # Run new container
+                    echo "Starting new container..."
+                    docker run -d -p 8083:8083 --name sbexample-app ${DOCKER_IMAGE}:${DOCKER_TAG}
+                    
+                    # Verify container is running
+                    echo "Verifying container status..."
+                    docker ps | grep sbexample-app
+                '''
             }
         }
     }
     
     post {
-        always {
-            cleanWs()
-        }
         success {
             echo 'Pipeline completed successfully!'
+            sh '''
+                echo "Container logs:"
+                docker logs sbexample-app
+            '''
         }
         failure {
             echo 'Pipeline failed!'
+        }
+        always {
+            cleanWs()
         }
     }
 } 
