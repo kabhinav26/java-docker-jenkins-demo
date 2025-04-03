@@ -1,6 +1,11 @@
 pipeline {
     agent any
     
+    tools {
+        maven 'Maven'
+        jdk 'JDK'
+    }
+    
     triggers {
         pollSCM('* * * * *')  // Poll SCM every minute (can be adjusted)
     }
