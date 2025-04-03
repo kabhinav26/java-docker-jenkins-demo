@@ -24,4 +24,9 @@ public class SbexampleApplication {
 		return "Hello from Docker!";
 	}
 
+	@GetMapping("/new")
+	public String helloNew() {
+		return "Hello from Docker!";
+	}
+
 }
