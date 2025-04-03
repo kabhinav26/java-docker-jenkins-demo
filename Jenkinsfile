@@ -2,8 +2,8 @@ pipeline {
     agent any
     
     tools {
-        maven 'maven'
-        jdk 'jdk'
+        maven 'Maven'
+        jdk 'JDK'
     }
     
     triggers {
@@ -18,6 +18,10 @@ pipeline {
     stages {
         stage('Checkout') {
             steps {
+                sh 'which mvn'
+                sh 'mvn --version'
+                sh 'which java'
+                sh 'java --version' 
                 checkout scm
             }
         }
