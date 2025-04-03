@@ -13,15 +13,25 @@ pipeline {
     environment {
         DOCKER_IMAGE = 'sbexample'
         DOCKER_TAG = "${BUILD_NUMBER}"
+        DOCKER_HOST = 'unix:///Users/abhinav/.docker/run/docker.sock'
     }
     
     stages {
+        stage('Verify Docker') {
+            steps {
+                sh '''
+                    echo "Docker socket permissions:"
+                    ls -l /Users/abhinav/.docker/run/docker.sock
+                    echo "Docker version:"
+                    docker version
+                    echo "Docker info:"
+                    docker info
+                '''
+            }
+        }
+
         stage('Checkout') {
             steps {
-                sh 'which mvn'
-                sh 'mvn --version'
-                sh 'which java'
-                sh 'java --version' 
                 checkout scm
             }
         }
@@ -41,7 +51,6 @@ pipeline {
         stage('Build Docker Image') {
             steps {
                 script {
-                    // Build new Docker image
                     sh "docker build -t ${DOCKER_IMAGE}:${DOCKER_TAG} ."
                 }
             }
@@ -50,7 +59,6 @@ pipeline {
         stage('Stop and Remove Old Container') {
             steps {
                 script {
-                    // Stop and remove existing container if it exists
                     sh '''
                         if [ "$(docker ps -q -f name=sbexample-app)" ]; then
                             docker stop sbexample-app
@@ -64,7 +72,6 @@ pipeline {
         stage('Run New Container') {
             steps {
                 script {
-                    // Run new container with the latest image
                     sh "docker run -d -p 8083:8083 --name sbexample-app ${DOCKER_IMAGE}:${DOCKER_TAG}"
                 }
             }
@@ -73,7 +80,6 @@ pipeline {
     
     post {
         always {
-            // Clean up workspace
             cleanWs()
         }
         success {
