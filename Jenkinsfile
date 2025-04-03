@@ -1,9 +1,9 @@
 pipeline {
-    agent {
-        docker {
-            image 'cimg/openjdk:17.0'
-            args '-u root -v /var/run/docker.sock:/var/run/docker.sock'
-        }
+    agent any
+    
+    tools {
+        maven 'maven'
+        jdk 'jdk'
     }
     
     environment {
@@ -12,17 +12,44 @@ pipeline {
     }
     
     stages {
-        stage('Setup Docker') {
+        stage('Install Dependencies') {
             steps {
-                sh '''
-                    # Install Docker
-                    curl -fsSL https://get.docker.com -o get-docker.sh
-                    sh get-docker.sh
-                    
-                    # Verify Docker installation
-                    docker --version
-                    docker ps
-                '''
+                script {
+                    // Install Homebrew if not present
+                    sh '''
+                        if ! command -v brew &> /dev/null; then
+                            echo "Installing Homebrew..."
+                            /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+                        fi
+                        
+                        # Add Homebrew to PATH
+                        eval "$(/opt/homebrew/bin/brew shellenv)"
+                        
+                        # Install Docker if not present
+                        if ! command -v docker &> /dev/null; then
+                            echo "Installing Docker..."
+                            brew install --cask docker
+                        fi
+                        
+                        # Start Docker if not running
+                        if ! docker info &> /dev/null; then
+                            echo "Starting Docker..."
+                            open -a Docker
+                            # Wait for Docker to start
+                            for i in {1..30}; do
+                                if docker info &> /dev/null; then
+                                    break
+                                fi
+                                sleep 1
+                            done
+                        fi
+                        
+                        # Verify installations
+                        docker --version
+                        mvn --version
+                        java --version
+                    '''
+                }
             }
         }
 
@@ -46,26 +73,31 @@ pipeline {
         
         stage('Docker Build and Deploy') {
             steps {
-                sh '''
-                    # Build the image
-                    docker build -t ${DOCKER_IMAGE}:${DOCKER_TAG} .
-                    
-                    # Stop and remove existing container if running
-                    CONTAINER_ID=$(docker ps -q -f name=sbexample-app)
-                    if [ ! -z "$CONTAINER_ID" ]; then
-                        echo "Stopping existing container..."
-                        docker stop $CONTAINER_ID
-                        docker rm $CONTAINER_ID
-                    fi
-                    
-                    # Run new container
-                    echo "Starting new container..."
-                    docker run -d -p 8083:8083 --name sbexample-app ${DOCKER_IMAGE}:${DOCKER_TAG}
-                    
-                    # Verify container is running
-                    echo "Verifying container status..."
-                    docker ps | grep sbexample-app
-                '''
+                script {
+                    sh '''
+                        # Ensure Docker is running
+                        eval "$(/opt/homebrew/bin/brew shellenv)"
+                        
+                        # Build the image
+                        docker build -t ${DOCKER_IMAGE}:${DOCKER_TAG} .
+                        
+                        # Stop and remove existing container if running
+                        CONTAINER_ID=$(docker ps -q -f name=sbexample-app)
+                        if [ ! -z "$CONTAINER_ID" ]; then
+                            echo "Stopping existing container..."
+                            docker stop $CONTAINER_ID
+                            docker rm $CONTAINER_ID
+                        fi
+                        
+                        # Run new container
+                        echo "Starting new container..."
+                        docker run -d -p 8083:8083 --name sbexample-app ${DOCKER_IMAGE}:${DOCKER_TAG}
+                        
+                        # Verify container is running
+                        echo "Verifying container status..."
+                        docker ps | grep sbexample-app
+                    '''
+                }
             }
         }
     }
@@ -74,6 +106,7 @@ pipeline {
         success {
             echo 'Pipeline completed successfully!'
             sh '''
+                eval "$(/opt/homebrew/bin/brew shellenv)"
                 echo "Container logs:"
                 docker logs sbexample-app
             '''
