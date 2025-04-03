@@ -1,13 +1,9 @@
 pipeline {
-    agent any
-    
-    tools {
-        maven 'maven'
-        jdk 'jdk'
-    }
-    
-    triggers {
-        pollSCM('* * * * *')  // Poll SCM every minute (can be adjusted)
+    agent {
+        docker {
+            image 'cimg/openjdk:17.0'
+            args '-u root -v /var/run/docker.sock:/var/run/docker.sock'
+        }
     }
     
     environment {
@@ -16,17 +12,16 @@ pipeline {
     }
     
     stages {
-        stage('Verify Environment') {
+        stage('Setup Docker') {
             steps {
                 sh '''
-                    echo "Checking Docker installation..."
-                    which docker || (echo "Docker not found" && exit 1)
+                    # Install Docker
+                    curl -fsSL https://get.docker.com -o get-docker.sh
+                    sh get-docker.sh
+                    
+                    # Verify Docker installation
                     docker --version
                     docker ps
-                    
-                    echo "Checking Java and Maven..."
-                    mvn --version
-                    java --version
                 '''
             }
         }
